@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Survival Correlation Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div>
+        <select v-model="selectedVar">
+          <option v-for="varName in allVars" :value="varName">{{ varName }}</option>
+        </select>
+        <button v-on:click="addVariable">Add</button>
+      </div>
+      <div v-for="(varName, index) in selectedVars">
+        <span>{{ varName }}</span>
+        <button v-on:click="removeVariable(index)">Remove</button>
+      </div>
+      <button v-on:click="calculateCorrelation">Calculate</button>
+      <div id="correlation-chart"></div>
+    </div>
+
+    <script>
+      const app = new Vue({
+        el: '#app',
+        data: {
+          allVars: ['Sex', 'Pclass', 'Age', 'SibSp', 'Parch', 'Ticket', 'Fare', 'Cabin', 'Embarked', 'Boat', 'Body', 'Home.dest'],
+          selectedVars: [],
+          selectedVar: 'Sex',
+        },
+        methods: {
+          addVariable: function () {
+            this.selectedVars.push(this.selectedVar)
+          },
+          removeVariable: function (index) {
+            this.selectedVars.splice(index, 1)
+          },
+          calculateCorrelation: function () {
+            const apiUrl = 'https://raw.githubusercontent.com/lzhq20190629/titanic/main/titanic.csv'
+            fetch(apiUrl)
+              .then((response) => response.text())
+              .then((data) => {
+                const dataLines = data.split('\n')
+                const headerLine = dataLines[0]
+                const headers = headerLine.split(',')
+                const varIndexes = this.selectedVars.map((varName) => headers.indexOf(varName))
+                const survivalIndex = headers.indexOf('Survived')
+                const dataPoints = dataLines
+                  .slice(1)
+                  .map((line) => line.split(',').map(parseFloat))
+                  .filter((lineData) => lineData.every((data) => !isNaN(data)))
+                  .map((lineData) => varIndexes.map((varIndex) => lineData[varIndex]))
+                const survivalData = dataLines
+                  .slice(1)
+                  .map((line) => line.split(','))
+                  .filter((lineData) => lineData.every((data) => !isNaN(parseFloat(data))))
+                  .map((lineData) => parseFloat(lineData[survivalIndex]))
+                const rhoValues = []
+                for (let i = 0; i < varIndexes.length; i++) {
+                  const varData = dataPoints.map((point) => point[i])
+                  const rho = spearmanCorrelation(varData, survivalData)
+                  rhoValues.push(rho)
+                }
+                drawCorrelationChart(this.selectedVars, rhoValues)
+              })
+          },
+        },
+      })
+
+      function drawCorrelationChart(varNames, rhoValues) {
+        const data = [
+          {
+            x: varNames,
+            y: rhoValues,
+            type: 'bar',
+          },
+        ]
+        const layout = {
+          title: 'Spearman Correlation Coefficients',
+        }
+        Plotly.new
